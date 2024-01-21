@@ -1,0 +1,28 @@
+//@version=5
+strategy("2min 20ema", overlay = true)
+
+pAverage = (high + low + open + close)/4
+_20ema = ta.ema(pAverage, 20) // tighten 20 ema to average of all candle values OHLC
+
+// Determines if trend is up or down
+    // true  = trend is up
+    // false = trend is down
+trendUp = (close[1] + close[2] + close[3] + close[4] + close[5])/5 > _20ema ? true : false
+// determine if trend has changed from previous to current candle
+prevTrend = trendUp[1]  // trendUp[1] gets the value from previous iteration
+
+// If up trend intact, and previous candle opens above, dips under, and closes above 20 ema, and current candle opens above mark long entry
+enterLong = trendUp and prevTrend == trendUp and open[1] > _20ema and low[1] < _20ema and close[1] > _20ema and open > _20ema ? true : false
+prevEnterlong = enterLong[1]
+
+// If down trend intact, and previous candle opens below, dips above, and closes under _20ema, and current candle opens under _20ema, mark short entry
+enterShort = not trendUp and prevTrend == trendUp and open[1] < _20ema and high[1] > _20ema and close[1] < _20ema and open < _20ema ? true : false
+prevEnterShort = enterShort[1]
+
+
+plot(_20ema, "My 20 Ema", color.red)
+plot(ta.ema(close,20), "close 20 ema", color.purple)
+plotshape(trendUp and trendUp != prevTrend, style=shape.triangleup, location = location.abovebar, color = color.green)
+plotshape(not trendUp and trendUp != prevTrend, style=shape.triangledown, location = location.belowbar, color = color.red)
+plotshape(enterLong and not enterLong[1], style=shape.triangleup, location = location.abovebar, color = color.orange)
+plotshape(enterShort and not enterShort[1], style=shape.triangledown, location = location.belowbar, color = color.blue)
