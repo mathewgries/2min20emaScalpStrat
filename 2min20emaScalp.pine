@@ -1,130 +1,136 @@
 //@version=5
-strategy("2min 20ema", overlay = true)
+strategy("2min 20ema", overlay = true, calc_on_every_tick = true)
+// Order of operations
+// Set trend parameters
+// Check if we are in a position
+    // If yes: Check if we should take loss or take profit
+// Check if we should take entry
+    // 
+//=============== Declare Variables ====================================================================================
 
-// Check if open position
-// If open, check for exit
-// If not in position, check for entry
+// CONSTANTS
+var float STOP_POINTS = 10
+var float PROFIT_POINTS = 20
 
+// Trend parameters
+var float pAverage = na // Determines median of candle based on OHLC
+var float _20ema = na
+var int   directionCharacter =  na // Values: trend up = 1, trend down = 2
 
-//=============== Declare Variables ===========================================================================
-float pAverage = na // Determines median of candle based on OHLC
-float _20ema = na
-int directionCharacter = na // Values: trend up = 1, trend down = 2
+// Position parameters
+var bool  inPosition = false
+var bool  inLongPosition = na
+var bool  inShortPosition = na
+var float entryPrice = na
+var float stopLossPrice = na
+var float stopProfitPrice = na
+var bool  isProfit = na
+var float totalPointProfit = 0.0
+var float totalPointLoss = 0.0
 
-bool isInPosition = na
-float entryPrice = na
-float prevEntryPrice = na
-bool enterLong = na
-bool enterShort = na
-float diffEntryCurrentPrice = na
-
-int ptsOnGain = na
-int ptsOnLoss = na
-
-//=============== Set EMA markers ===========================================================================
+//=============== Set Trend Parameters =================================================================================
 
 pAverage := (high + low + open + close)/4
-_20ema := ta.ema(pAverage, 20) // tighten 20 ema to average of all candle values OHLC
+_20ema := ta.ema(pAverage, 20)
 
-//=============== Determine Short Term Trend ===========================================================================
-
-// Average of last 5 20 emas is below current, trend is up.
-// Average of last 5 20 emas is above curre,t trend is down
 if (_20ema[5] + _20ema[4] + _20ema[3] + _20ema[2] + _20ema[1])/5 < _20ema
     directionCharacter := 1
 else
     directionCharacter := 2
 
-//=============== Validate an exit ==========================================================================================
+//============== User defined functions ================================================================================
 
-prevEntryPrice := nz(entryPrice[1])
+// Long entry and exit validation
+getLongEntry() => 
+    log.info(str.tostring(directionCharacter))
+    directionCharacter[1] == directionCharacter
+      and open[1]  > _20ema 
+      and open[2]  > _20ema
+      and low[1]   < _20ema 
+      and close[1] > _20ema
+      and close[2] > _20ema
+      and open     > _20ema
 
-if prevEntryPrice != 0
-    isInPosition := true
-    entryPrice := prevEntryPrice
-    diffEntryCurrentPrice := math.abs(entryPrice - close)
-else
-    isInPosition := false
-    entryPrice := na
+getLongExit() => 
+    high >= stopProfitPrice
+      or low <= stopLossPrice
 
-if isInPosition and enterLong[1]
-    if entryPrice > close and diffEntryCurrentPrice >= 5
-        isInPosition := false
-        enterLong := false
-        label.new(bar_index, high, 
-          "EXIT LONG LOSS: " + str.tostring(close), 
-          color=color.white
-         )
-    else if entryPrice < close and diffEntryCurrentPrice <= 10
-        isInPosition := false
-        enterLong := false
-        label.new(bar_index, high, 
-          "EXIT LONG PROFIT: " + str.tostring(close), 
-          color=color.white
-         )
+// Short entry and exit validation
+getShortEntry() =>
+    log.info(str.tostring(directionCharacter))
+    directionCharacter[1] == directionCharacter
+      and open[1]  < _20ema 
+      and open[2]  < _20ema
+      and high[1]  > _20ema 
+      and close[1] < _20ema
+      and close[2] < _20ema
+      and open     < _20ema
+
+getShortExit() =>
+    low <= stopProfitPrice 
+      or high >= stopLossPrice
+
+//============== Check for position and eixt ===========================================================================
+
+glex = getLongExit()
+if inPosition and inLongPosition[1] and glex
+    log.info("EXIT LONG")
+    inLongPosition := false
+    inPosition := false
+    isProfit := high >= stopProfitPrice ? true : false
+    if isProfit
+        totalPointProfit += PROFIT_POINTS
     else
-        enterLong := true
-
-if isInPosition and enterShort[1]
-    if entryPrice < close and diffEntryCurrentPrice >= 5
-        isInPosition := false
-        enterShort := false
-        label.new(bar_index, high, 
-          "EXIT SHORT LOSS: " + str.tostring(close), 
-          color=color.white
-         )
-    else if entryPrice > close and diffEntryCurrentPrice <= 10
-        isInPosition := false
-        enterShort := false
-        label.new(bar_index, high, 
-          "EXIT SHORT PROFIT: " + str.tostring(close), 
-          color=color.white
-         )
-    else
-        enterShort := true
-
-log.info("Current: " + str.tostring(close))
-
-//=============== Validate an entry ==========================================================================================
-
-enterLong := 
-  not isInPosition[1]
-  and directionCharacter == 1
-  and directionCharacter[1] == directionCharacter
-  and (open[1] > _20ema and open[2] > _20ema)
-  and low[1] < _20ema 
-  and (close[1] > _20ema and close[2] > _20ema )
-  and open > _20ema 
- ? true : false
-
-prevEnterlong = enterLong[1]
-
-enterShort := 
-  not isInPosition[1]
-  and directionCharacter == 2
-  and directionCharacter[1] == directionCharacter
-  and (open[1] < _20ema and open[2] < _20ema)
-  and high[1] > _20ema 
-  and (close[1] < _20ema and close[2] < _20ema )
-  and open < _20ema 
- ? true : false
-
-prevEnterShort = enterShort[1]
-
-if enterLong or enterShort
-    isInPosition := true
-    entryPrice := open
-    directionText = enterLong ? 'long' : 'short'
-    label.new(
-      bar_index, 
-      high, 
-      str.tostring(entryPrice) +'\n'+directionText, 
+        totalPointLoss += STOP_POINTS
+    label.new(bar_index, high, 
+      "EXIT LONG \n" + str.tostring(close),
       color=color.white
      )
-else
-    isInPosition := false
 
-//=============== Plot the data =========================================================================================================
+gsex = getShortExit()
+if inPosition and inShortPosition[1] and gsex
+    log.info('EXIT SHORT')
+    inShortPosition := false
+    inPosition := false
+    isProfit := low <= stopProfitPrice ? true : false
+    if isProfit
+        totalPointProfit += PROFIT_POINTS
+    else
+        totalPointLoss += STOP_POINTS
+    label.new(bar_index, high, 
+      "EXIT SHORT \n" + str.tostring(close),
+      color=color.white
+     )
+
+//============== Check for position entry ==============================================================================
+
+glen = getLongEntry()
+gsen = getShortEntry()
+if not inPosition
+    if directionCharacter == 1 and glen
+        log.info("ENTER LONG")
+        inPosition := true
+        inLongPosition := true
+        entryPrice := open
+        stopLossPrice := entryPrice - STOP_POINTS
+        stopProfitPrice := entryPrice + PROFIT_POINTS
+        label.new(bar_index, high, 
+          "ENTER LONG \n" + str.tostring(entryPrice),
+          color=color.white
+         )
+    if directionCharacter == 2 and gsen
+        log.info("ENTER SHORT")
+        inPosition := true
+        inShortPosition := true
+        entryPrice := open
+        stopLossPrice := entryPrice + STOP_POINTS
+        stopProfitPrice := entryPrice - PROFIT_POINTS
+        label.new(bar_index, high, 
+          "ENTER SHORT \n" + str.tostring(entryPrice),
+          color=color.white
+         )
+
+//=============== Plot the data ========================================================================================
 
 plot(_20ema, "My 20 Ema", color.red)
 plotshape(
@@ -137,13 +143,13 @@ plotshape(
   style=shape.triangledown, 
   location = location.belowbar, 
   color = color.red)
-plotshape(
-  enterLong and isInPosition and not isInPosition[1],
-  style=shape.triangleup, 
-  location = location.abovebar, 
-  color = color.orange)
-plotshape(
-  enterShort and isInPosition and not isInPosition[1], 
-  style=shape.triangledown, 
-  location = location.belowbar, 
-  color = color.blue)
+// plotshape(
+//   enterLong and isInPosition and not isInPosition[1],
+//   style=shape.triangleup, 
+//   location = location.abovebar, 
+//   color = color.orange)
+// plotshape(
+//   enterShort and isInPosition and not isInPosition[1], 
+//   style=shape.triangledown, 
+//   location = location.belowbar, 
+//   color = color.blue)
