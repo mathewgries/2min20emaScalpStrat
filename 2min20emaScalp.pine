@@ -3,14 +3,14 @@ strategy("2min 20ema", overlay = true, calc_on_every_tick = true)
 // Order of operations
 // Set trend parameters
 // Check if we are in a position
-    // If yes: Check if we should take loss or take profit
+    // If yes: Check if we should take move stop, take profit, or take loss
 // Check if we should take entry
     // 
 //=============== Declare Variables ====================================================================================
 
 // CONSTANTS
 var float STOP_POINTS = 10
-var float PROFIT_POINTS = 20
+var float MOVE_STOPS_POINTS = 20
 
 // Trend parameters
 var float pAverage = na // Determines median of candle based on OHLC
@@ -22,11 +22,11 @@ var bool  inPosition = false
 var bool  inLongPosition = na
 var bool  inShortPosition = na
 var float entryPrice = na
-var float stopLossPrice = na
-var float stopProfitPrice = na
+var float exitPrice = na
+var float moveStopPrice = na
 var bool  isProfit = na
-var float totalPointProfit = 0.0
-var float totalPointLoss = 0.0
+var float totalPointsProfit = 0.0
+var float totalPointsLoss = 0.0
 var float totalDollarsProfit = 0.0
 var float totalDolloarsLoss = 0.0
 
@@ -52,34 +52,60 @@ else
 //============== User defined functions ================================================================================
 
 // Long entry and exit validation
-getLongEntry() => 
+getLongEntry(bool isRealtime) =>
     log.info(str.tostring(directionCharacter))
-    directionCharacter[1] == directionCharacter
-      and open[1]  > _20ema 
+    isRealtime 
+      and directionCharacter[1] == directionCharacter
+      and open[1]  > _20ema
       and open[2]  > _20ema
-      and low[1]   < _20ema 
+      and low[1]   < _20ema
       and close[1] > _20ema
       and close[2] > _20ema
       and open     > _20ema
 
-getLongExit() => 
-    high >= stopProfitPrice
-      or low <= stopLossPrice
+getLongExit() =>
+    close <= exitPrice
+
+moveLongStops() =>
+    close >= moveStopPrice
 
 // Short entry and exit validation
-getShortEntry() =>
+getShortEntry(bool isRealtime) =>
     log.info(str.tostring(directionCharacter))
-    directionCharacter[1] == directionCharacter
-      and open[1]  < _20ema 
+    isRealtime
+      and directionCharacter[1] == directionCharacter
+      and open[1]  < _20ema
       and open[2]  < _20ema
-      and high[1]  > _20ema 
+      and high[1]  > _20ema
       and close[1] < _20ema
       and close[2] < _20ema
       and open     < _20ema
 
 getShortExit() =>
-    low <= stopProfitPrice 
-      or high >= stopLossPrice
+    close >= exitPrice
+
+moveShortStops() =>
+    close <= moveStopPrice
+
+//============== Check for stop move ===========================================================================
+
+mls = moveLongStops()
+mss = moveShortStops()
+if inPosition and inLongPosition[1] and mls
+    moveStopPrice += STOP_POINTS
+    exitPrice += STOP_POINTS
+    label.new(bar_index, high,
+      'MOVED STOP \n' + str.tostring(exitPrice),
+      color=color.white
+     )
+
+if inPosition and inShortPosition[1] and mss
+    moveStopPrice -= STOP_POINTS
+    exitPrice -= STOP_POINTS
+    label.new(bar_index, high,
+      'MOVED STOP \n' + str.tostring(exitPrice),
+      color=color.white
+     )
 
 //============== Check for position and eixt ===========================================================================
 
@@ -88,19 +114,19 @@ if inPosition and inLongPosition[1] and glex
     log.info("EXIT LONG")
     inLongPosition := false
     inPosition := false
-    isProfit := high >= stopProfitPrice ? true : false
+    isProfit := close >= entryPrice ? true : false
     if isProfit
-        totalPointProfit += PROFIT_POINTS
-        totalDollarsProfit += PROFIT_POINTS * 4 * 5
-        table.cell(totalsTable, 1,1, str.tostring(totalPointProfit))
+        totalPointsProfit += (exitPrice - entryPrice)
+        totalDollarsProfit += (exitPrice - entryPrice) * 4 * 5
+        table.cell(totalsTable, 1,1, str.tostring(totalPointsProfit))
         table.cell(totalsTable, 1,2, str.tostring(totalDollarsProfit))
     else
-        totalPointLoss += STOP_POINTS
-        totalDolloarsLoss += STOP_POINTS * 4 * 5
-        table.cell(totalsTable, 2,1, str.tostring(totalPointLoss))
+        totalPointsLoss += (entryPrice - exitPrice)
+        totalDolloarsLoss += (entryPrice - exitPrice) * 4 * 5
+        table.cell(totalsTable, 2,1, str.tostring(totalPointsLoss))
         table.cell(totalsTable, 2,2, str.tostring(totalDolloarsLoss))
-    label.new(bar_index, high, 
-      "EXIT LONG \n" + str.tostring(close),
+    label.new(bar_index, high,
+      "EXIT LONG \n" + str.tostring(exitPrice),
       color=color.white
      )
 
@@ -109,34 +135,34 @@ if inPosition and inShortPosition[1] and gsex
     log.info('EXIT SHORT')
     inShortPosition := false
     inPosition := false
-    isProfit := low <= stopProfitPrice ? true : false
+    isProfit := close <= entryPrice ? true : false
     if isProfit
-        totalPointProfit += PROFIT_POINTS
-        totalDollarsProfit += PROFIT_POINTS * 4 * 5
-        table.cell(totalsTable, 1,1, str.tostring(totalPointProfit))
+        totalPointsProfit += (entryPrice - exitPrice)
+        totalDollarsProfit += (entryPrice - exitPrice) * 4 * 5
+        table.cell(totalsTable, 1,1, str.tostring(totalPointsProfit))
         table.cell(totalsTable, 1,2, str.tostring(totalDollarsProfit))
     else
-        totalPointLoss += STOP_POINTS
-        totalDolloarsLoss += STOP_POINTS * 4 * 5
-        table.cell(totalsTable, 2,1, str.tostring(totalPointLoss))
+        totalPointsLoss += (exitPrice - entryPrice)
+        totalDolloarsLoss += (exitPrice - entryPrice) * 4 * 5
+        table.cell(totalsTable, 2,1, str.tostring(totalPointsLoss))
         table.cell(totalsTable, 2,2, str.tostring(totalDolloarsLoss))
-    label.new(bar_index, high, 
-      "EXIT SHORT \n" + str.tostring(close),
+    label.new(bar_index, high,
+      "EXIT SHORT \n" + str.tostring(exitPrice),
       color=color.white
      )
 
 //============== Check for position entry ==============================================================================
 
-glen = getLongEntry()
-gsen = getShortEntry()
+glen = getLongEntry(barstate.isrealtime)
+gsen = getShortEntry(barstate.isrealtime)
 if not inPosition
     if directionCharacter == 1 and glen
         log.info("ENTER LONG")
         inPosition := true
         inLongPosition := true
         entryPrice := open
-        stopLossPrice := entryPrice - STOP_POINTS
-        stopProfitPrice := entryPrice + PROFIT_POINTS
+        exitPrice := entryPrice - STOP_POINTS
+        moveStopPrice := entryPrice + MOVE_STOPS_POINTS
         label.new(bar_index, high, 
           "ENTER LONG \n" + str.tostring(entryPrice),
           color=color.white
@@ -146,8 +172,8 @@ if not inPosition
         inPosition := true
         inShortPosition := true
         entryPrice := open
-        stopLossPrice := entryPrice + STOP_POINTS
-        stopProfitPrice := entryPrice - PROFIT_POINTS
+        exitPrice := entryPrice + STOP_POINTS
+        moveStopPrice := entryPrice - MOVE_STOPS_POINTS
         label.new(bar_index, high, 
           "ENTER SHORT \n" + str.tostring(entryPrice),
           color=color.white
@@ -157,22 +183,12 @@ if not inPosition
 
 plot(_20ema, "My 20 Ema", color.red)
 plotshape(
-  directionCharacter == 1 and directionCharacter[1] != 1, 
-  style=shape.triangleup, 
-  location = location.abovebar, 
+  directionCharacter == 1 and directionCharacter[1] != 1,
+  style=shape.triangleup,
+  location = location.abovebar,
   color = color.green)
 plotshape(
-  directionCharacter == 2 and directionCharacter[1] != 2, 
-  style=shape.triangledown, 
-  location = location.belowbar, 
+  directionCharacter == 2 and directionCharacter[1] != 2,
+  style=shape.triangledown,
+  location = location.belowbar,
   color = color.red)
-// plotshape(
-//   enterLong and isInPosition and not isInPosition[1],
-//   style=shape.triangleup, 
-//   location = location.abovebar, 
-//   color = color.orange)
-// plotshape(
-//   enterShort and isInPosition and not isInPosition[1], 
-//   style=shape.triangledown, 
-//   location = location.belowbar, 
-//   color = color.blue)
