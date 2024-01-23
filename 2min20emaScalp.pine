@@ -27,6 +27,17 @@ var float stopProfitPrice = na
 var bool  isProfit = na
 var float totalPointProfit = 0.0
 var float totalPointLoss = 0.0
+var float totalDollarsProfit = 0.0
+var float totalDolloarsLoss = 0.0
+
+//=============== Table to Display results =============================================================================
+
+var table totalsTable = table.new(position.top_right, 4, 4, frame_width = 2, frame_color = color.black)
+table.cell(totalsTable, 0, 0, bgcolor = color.blue)
+table.cell(totalsTable, 1,0, "Profit", bgcolor = color.blue, text_color = color.white)
+table.cell(totalsTable, 2,0, "Loss", bgcolor = color.blue, text_color = color.white)
+table.cell(totalsTable, 0,1, "Pts", text_halign = 'center', text_valign = 'center')
+table.cell(totalsTable, 0,2, "$",text_halign = 'center', text_valign = 'center')
 
 //=============== Set Trend Parameters =================================================================================
 
@@ -80,8 +91,14 @@ if inPosition and inLongPosition[1] and glex
     isProfit := high >= stopProfitPrice ? true : false
     if isProfit
         totalPointProfit += PROFIT_POINTS
+        totalDollarsProfit += PROFIT_POINTS * 4 * 5
+        table.cell(totalsTable, 1,1, str.tostring(totalPointProfit))
+        table.cell(totalsTable, 1,2, str.tostring(totalDollarsProfit))
     else
         totalPointLoss += STOP_POINTS
+        totalDolloarsLoss += STOP_POINTS * 4 * 5
+        table.cell(totalsTable, 2,1, str.tostring(totalPointLoss))
+        table.cell(totalsTable, 2,2, str.tostring(totalDolloarsLoss))
     label.new(bar_index, high, 
       "EXIT LONG \n" + str.tostring(close),
       color=color.white
@@ -95,8 +112,14 @@ if inPosition and inShortPosition[1] and gsex
     isProfit := low <= stopProfitPrice ? true : false
     if isProfit
         totalPointProfit += PROFIT_POINTS
+        totalDollarsProfit += PROFIT_POINTS * 4 * 5
+        table.cell(totalsTable, 1,1, str.tostring(totalPointProfit))
+        table.cell(totalsTable, 1,2, str.tostring(totalDollarsProfit))
     else
         totalPointLoss += STOP_POINTS
+        totalDolloarsLoss += STOP_POINTS * 4 * 5
+        table.cell(totalsTable, 2,1, str.tostring(totalPointLoss))
+        table.cell(totalsTable, 2,2, str.tostring(totalDolloarsLoss))
     label.new(bar_index, high, 
       "EXIT SHORT \n" + str.tostring(close),
       color=color.white
